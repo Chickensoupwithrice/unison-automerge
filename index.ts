@@ -6,10 +6,11 @@ import type { ImportedFile, Folder, FolderItem } from './types';
 import { Command, createArgument } from 'commander';
 import ora from 'ora';
 import path from 'path';
-import { mkdir, readdir, stat, copyFile, readFile } from 'fs/promises';
+import { mkdir, readdir, stat, copyFile, readFile, writeFile } from 'fs/promises';
 import { cosmiconfig } from 'cosmiconfig';
 import ignore, { Ignore } from 'ignore';
 import type { Stats } from 'fs';
+
 
 const repo = new Repo({
   network: [
@@ -131,6 +132,51 @@ async function createAutomergeDocuments(startPath: string) {
   return folderHandle
 }
 
+async function downloadAutomergeDocuments(
+  rootUrl: AutomergeUrl,
+  outputPath: string
+) {
+  console.log(rootUrl)
+  const rootHandle = repo.find<Folder | ImportedFile>(rootUrl)
+  const rootDoc = await rootHandle.doc()
+  console.log(rootHandle.state)
+  console.log(rootDoc)
+
+  async function downloadItem(doc: Folder | ImportedFile, currentPath: string) {
+    // TODO:
+    // We need to check mimetypes
+    if ('contents' in doc && Array.isArray(doc.contents)) {
+      // This is a folder
+      const folderPath = path.join(currentPath, doc.name)
+      console.log(folderPath)
+      await mkdir(folderPath, { recursive: true })
+
+      // Recursively process all items in the folder
+      for (const item of doc.contents) {
+        const itemHandle = repo.find(item.automergeUrl)
+        const itemDoc = await itemHandle.doc()
+        await downloadItem(itemDoc, folderPath)
+      }
+    } else {
+      // This is a file
+      const filePath = path.join(currentPath, doc.name)
+
+      if (typeof doc.contents === 'string') {
+        await writeFile(filePath, doc.contents, 'utf-8')
+      } else if (doc.contents instanceof Uint8Array) {
+        await writeFile(filePath, doc.contents)
+      }
+
+      //if (doc.executable) {
+      //  await chmod(filePath, 0o755)
+      //}
+    }
+  }
+
+  await downloadItem(rootDoc, outputPath)
+}
+
+
 async function* walk(dir: string, root = dir): AsyncGenerator<FileInfo> {
   const files = await readdir(dir);
 
@@ -165,51 +211,21 @@ const processFile = async (fileInfo: FileInfo, destDir: string): Promise<string>
   return destPath;
 };
 
-const push = async (source: string, options: CommandOptions): Promise<void> => {
-  const spinner = ora('Pushing files...').start();
-  const config = await loadConfig();
-  const destination = options.dest ?? config.defaultDestination ?? './dest';
-  let fileCount = 0;
+
+const pull = async (source: string, path: string): Promise<void> => {
+  console.log(`Listing all files in ${source}:`);
+  const s = <AutomergeUrl>(source)
 
   try {
-    await mkdir(destination, { recursive: true });
-
-    for await (const fileInfo of walk(source)) {
-      spinner.text = `Processing: ${fileInfo.relativePath}`;
-      await processFile(fileInfo, destination);
-      fileCount++;
-    }
-
-    spinner.succeed(`Successfully pushed ${fileCount} files to ${destination}`);
+    const folderHandle = await downloadAutomergeDocuments(s, path.dest)
+    repo.shutdown()
   } catch (err) {
-    spinner.fail(`Push failed: ${err instanceof Error ? err.message : String(err)}`);
+    console.error('List failed:', err instanceof Error ? err.message : err);
     process.exit(1);
   }
 };
 
-const pull = async (source: string, options: CommandOptions): Promise<void> => {
-  const spinner = ora('Pulling files...').start();
-  const config = await loadConfig();
-  const destination = options.dest ?? config.defaultSource ?? './src';
-  let fileCount = 0;
-
-  try {
-    await mkdir(destination, { recursive: true });
-
-    for await (const fileInfo of walk(source)) {
-      spinner.text = `Processing: ${fileInfo.relativePath}`;
-      await processFile(fileInfo, destination);
-      fileCount++;
-    }
-
-    spinner.succeed(`Successfully pulled ${fileCount} files to ${destination}`);
-  } catch (err) {
-    spinner.fail(`Pull failed: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-};
-
-const list = async (source: string): Promise<void> => {
+const push = async (source: string): Promise<void> => {
   console.log(`Listing all files in ${source}:`);
 
   try {
@@ -221,6 +237,7 @@ const list = async (source: string): Promise<void> => {
     process.exit(1);
   }
 };
+
 
 const program = new Command();
 
@@ -236,21 +253,15 @@ program.hook('preAction', async () => {
   await initIgnorePatterns(program.opts().ignore);
 });
 
-program.command('push')
-  .description('Push files to destination')
-  .argument('<source>', 'Source directory')
-  .option('-d, --dest <path>', 'Destination directory')
-  .action(push);
-
 program.command('pull')
   .description('Pull files from source')
-  .argument('<source>', 'Source directory')
+  .argument('<source>', 'Source Automerge URL')
   .option('-d, --dest <path>', 'Destination directory')
   .action(pull);
 
-program.command('list')
-  .description('List all files in directory')
+program.command('push')
+  .description('Push all files in directory into Automerge')
   .argument('<source>', 'Source directory')
-  .action(list);
+  .action(push);
 
 program.parse();
