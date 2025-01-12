@@ -65,21 +65,6 @@ const loadConfig = async (): Promise<Config> => {
   }
 };
 
-async function populateDocs(dir: string, docs: Doc[]): Doc[] {
-  const files = await readdir(dir);
-  for (const file of files) {
-    const filepath = path.join(dir, file);
-    // Skip if file matches ignore patterns
-    if (ig.ignores(filepath)) {
-      continue;
-    }
-    const stats = await stat(filepath);
-    if (stats.isDirectory()) {
-
-    }
-  }
-}
-
 async function createAutomergeDocuments(startPath: string) {
   // Create the root folder handle that will accumulate all documents
   const folderHandle = repo.create<Folder>({
