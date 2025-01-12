@@ -84,7 +84,8 @@ async function* walk(dir: string, root = dir): AsyncGenerator<FileInfo> {
 
 const processFile = async (fileInfo: FileInfo, destDir: string): Promise<string> => {
   const destPath = path.join(destDir, fileInfo.relativePath);
-  await mkdir(path.dirname(destPath), { recursive: true });
+  console.log({destPath, fileInfo})
+  // await mkdir(path.dirname(destPath), { recursive: true });
   // await copyFile(fileInfo.path, destPath);
   return destPath;
 };
