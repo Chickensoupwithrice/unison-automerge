@@ -2,7 +2,8 @@
 
 import { AutomergeUrl, Repo } from "@automerge/automerge-repo"
 import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket"
-import { Command } from 'commander';
+import type { ImportedFile, Folder, FolderItem } from './types';
+import { Command, createArgument } from 'commander';
 import ora from 'ora';
 import path from 'path';
 import { mkdir, readdir, stat, copyFile, readFile } from 'fs/promises';
@@ -64,6 +65,87 @@ const loadConfig = async (): Promise<Config> => {
   }
 };
 
+async function populateDocs(dir: string, docs: Doc[]): Doc[] {
+  const files = await readdir(dir);
+  for (const file of files) {
+    const filepath = path.join(dir, file);
+    // Skip if file matches ignore patterns
+    if (ig.ignores(filepath)) {
+      continue;
+    }
+    const stats = await stat(filepath);
+    if (stats.isDirectory()) {
+
+    }
+  }
+}
+
+async function createAutomergeDocuments(startPath: string) {
+  // Create the root folder handle that will accumulate all documents
+  const folderHandle = repo.create<Folder>({
+    name: path.basename(startPath),
+    contents: []
+  })
+
+  async function dfs(currentPath: string, parentHandle = folderHandle) {
+    const stats = await stat(currentPath)
+
+    const relativePath = path.relative(startPath, currentPath)
+    // Skip if path matches gitignore rules
+    if (relativePath && ig.ignores(relativePath)) {
+      console.log("ignoring: " + currentPath)
+      return parentHandle
+    }
+
+    console.log("recursing: " + currentPath)
+
+    if (stats.isFile()) {
+      const fileHandle = repo.create<ImportedFile>()
+      const contents = await readFile(currentPath, 'utf-8')
+
+      fileHandle.change(d => {
+        d.contents = contents
+        d.name = path.basename(currentPath)
+        d.executable = !!(stats.mode & 0o111)
+      })
+
+      parentHandle.change(d => {
+        d.contents.push({
+          name: path.basename(currentPath),
+          automergeUrl: fileHandle.url
+        })
+      })
+
+      return parentHandle
+    }
+
+    if (stats.isDirectory()) {
+      const dirHandle = repo.create<Folder>({
+        name: path.basename(currentPath),
+        contents: []
+      })
+
+      const children = await readdir(currentPath)
+
+      for (const child of children) {
+        await dfs(path.join(currentPath, child), dirHandle)
+      }
+
+      parentHandle.change(d => {
+        d.contents.push({
+          name: path.basename(currentPath),
+          automergeUrl: dirHandle.url
+        })
+      })
+
+      return parentHandle
+    }
+  }
+
+  await dfs(startPath)
+  return folderHandle
+}
+
 async function* walk(dir: string, root = dir): AsyncGenerator<FileInfo> {
   const files = await readdir(dir);
 
@@ -92,7 +174,7 @@ async function* walk(dir: string, root = dir): AsyncGenerator<FileInfo> {
 
 const processFile = async (fileInfo: FileInfo, destDir: string): Promise<string> => {
   const destPath = path.join(destDir, fileInfo.relativePath);
-  console.log({destPath, fileInfo})
+  console.log({ destPath, fileInfo })
   // await mkdir(path.dirname(destPath), { recursive: true });
   // await copyFile(fileInfo.path, destPath);
   return destPath;
@@ -146,11 +228,9 @@ const list = async (source: string): Promise<void> => {
   console.log(`Listing all files in ${source}:`);
 
   try {
-    for await (const fileInfo of walk(source)) {
-      console.log(`- ${fileInfo.relativePath}`);
-      console.log(`  Size: ${fileInfo.stats.size} bytes`);
-      console.log(`  Modified: ${fileInfo.stats.mtime}`);
-    }
+    const folderHandle = await createAutomergeDocuments(source)
+    console.log(folderHandle.url)
+    repo.shutdown()
   } catch (err) {
     console.error('List failed:', err instanceof Error ? err.message : err);
     process.exit(1);
