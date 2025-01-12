@@ -5,7 +5,9 @@
     "@automerge/automerge-repo-network-websocket": "2.0.0-alpha.13",
     "commander": "^13.0.0",
     "cosmiconfig": "^9.0.0",
+    "file-type": "^19.6.0",
     "ignore": "^7.0.0",
+    "is-binary-path": "^3.0.0",
     "ora": "^8.1.1"
   }
 }

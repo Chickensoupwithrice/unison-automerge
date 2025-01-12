@@ -10,6 +10,8 @@ import { mkdir, readdir, stat, copyFile, readFile, writeFile } from 'fs/promises
 import { cosmiconfig } from 'cosmiconfig';
 import ignore, { Ignore } from 'ignore';
 import type { Stats } from 'fs';
+import isBinaryPath from 'is-binary-path';
+import mime from "mime-types";
 
 
 const repo = new Repo({
@@ -70,6 +72,7 @@ async function createAutomergeDocuments(startPath: string) {
   // Create the root folder handle that will accumulate all documents
   const folderHandle = repo.create<Folder>({
     name: path.basename(startPath),
+    contentType: "application/vnd.automerge.folder",
     contents: []
   })
 
@@ -87,13 +90,30 @@ async function createAutomergeDocuments(startPath: string) {
 
     if (stats.isFile()) {
       const fileHandle = repo.create<ImportedFile>()
-      const contents = await readFile(currentPath, 'utf-8')
 
-      fileHandle.change(d => {
-        d.contents = contents
-        d.name = path.basename(currentPath)
-        d.executable = !!(stats.mode & 0o111)
-      })
+      const isBinary = isBinaryPath(currentPath);
+      const buffer = await readFile(currentPath);
+      const mimeType = mime.lookup(currentPath);
+      
+
+      console.log({ currentPath, mimeType, isBinary })
+
+      if (isBinary) {
+        fileHandle.change(d => {
+          d.contents = Uint8Array.from(buffer)
+          d.contentType = mimeType || "application/octet-stream"
+          d.name = path.basename(currentPath)
+          d.executable = !!(stats.mode & 0o111)
+        })
+      } else {
+        const contents = await readFile(currentPath, 'utf-8')
+        fileHandle.change(d => {
+          d.contents = contents
+          d.contentType = mimeType || "text/plain"
+          d.name = path.basename(currentPath)
+          d.executable = !!(stats.mode & 0o111)
+        })
+      }
 
       parentHandle.change(d => {
         d.contents.push({
@@ -108,6 +128,7 @@ async function createAutomergeDocuments(startPath: string) {
     if (stats.isDirectory()) {
       const dirHandle = repo.create<Folder>({
         name: path.basename(currentPath),
+        contentType: "application/vnd.automerge.folder",
         contents: []
       })
 
