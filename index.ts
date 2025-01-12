@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 import { Repo } from "@automerge/automerge-repo"
 
+import type { File, Folder, FolderItem } from "./types"
+
 import { Command } from 'commander';
 import ora from 'ora';
 import path from 'path';
