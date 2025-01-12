@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@automerge/automerge": "^2.2.8",
+    "@automerge/automerge-repo": "^1.2.1"
+  }
+}
