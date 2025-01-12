@@ -4,6 +4,7 @@
     "@automerge/automerge-repo": "^1.2.1",
     "commander": "^13.0.0",
     "cosmiconfig": "^9.0.0",
+    "ignore": "^7.0.0",
     "ora": "^8.1.1"
   }
 }
