@@ -1,13 +1,11 @@
-#!/usr/bin/env bun
-import { Repo } from "@automerge/automerge-repo"
-
-import type { File, Folder, FolderItem } from "./types"
+#!/usr/bin/env node
 
 import { Command } from 'commander';
 import ora from 'ora';
 import path from 'path';
-import { mkdir, readdir, stat, copyFile } from 'fs/promises';
+import { mkdir, readdir, stat, copyFile, readFile } from 'fs/promises';
 import { cosmiconfig } from 'cosmiconfig';
+import ignore, { Ignore } from 'ignore';
 import type { Stats } from 'fs';
 
 interface FileInfo {
@@ -25,6 +23,26 @@ interface CommandOptions {
   dest?: string;
 }
 
+// Global ignore patterns
+let ig: Ignore;
+
+const initIgnorePatterns = async (ignoreFile = '.gitignore'): Promise<void> => {
+  ig = ignore();
+  
+  // Default patterns
+  ig.add(['node_modules', '.git', '.DS_Store']);
+  
+  try {
+    const patterns = await readFile(ignoreFile, 'utf8');
+    ig.add(patterns);
+  } catch (err) {
+    // If ignore file doesn't exist, just use defaults
+    if (err.code !== 'ENOENT') {
+      console.warn(`Warning: Error reading ignore file: ${err.message}`);
+    }
+  }
+};
+
 // Configuration explorer
 const explorer = cosmiconfig('filesync');
 
@@ -38,19 +56,26 @@ const loadConfig = async (): Promise<Config> => {
   }
 };
 
-async function* walk(dir: string): AsyncGenerator<FileInfo> {
+async function* walk(dir: string, root = dir): AsyncGenerator<FileInfo> {
   const files = await readdir(dir);
   
   for (const file of files) {
     const filepath = path.join(dir, file);
+    const relativePath = path.relative(root, filepath);
+    
+    // Skip if file matches ignore patterns
+    if (ig.ignores(relativePath)) {
+      continue;
+    }
+    
     const stats = await stat(filepath);
     
     if (stats.isDirectory()) {
-      yield* walk(filepath);
+      yield* walk(filepath, root);
     } else {
       yield {
         path: filepath,
-        relativePath: path.relative(dir, filepath),
+        relativePath,
         stats
       };
     }
@@ -58,11 +83,8 @@ async function* walk(dir: string): AsyncGenerator<FileInfo> {
 }
 
 const processFile = async (fileInfo: FileInfo, destDir: string): Promise<string> => {
-  // This is where you can add custom processing for each file
-  // Currently just copying, but you could transform content here
   const destPath = path.join(destDir, fileInfo.relativePath);
   await mkdir(path.dirname(destPath), { recursive: true });
-  console.log(`Copying ${fileInfo.path} to ${destPath}`);
   // await copyFile(fileInfo.path, destPath);
   return destPath;
 };
@@ -74,13 +96,10 @@ const push = async (source: string, options: CommandOptions): Promise<void> => {
   let fileCount = 0;
 
   try {
-    // Ensure destination exists
     await mkdir(destination, { recursive: true });
 
-    // Walk through all files recursively
     for await (const fileInfo of walk(source)) {
       spinner.text = `Processing: ${fileInfo.relativePath}`;
-      
       await processFile(fileInfo, destination);
       fileCount++;
     }
@@ -99,13 +118,10 @@ const pull = async (source: string, options: CommandOptions): Promise<void> => {
   let fileCount = 0;
 
   try {
-    // Ensure destination exists
     await mkdir(destination, { recursive: true });
 
-    // Walk through all files recursively
     for await (const fileInfo of walk(source)) {
       spinner.text = `Processing: ${fileInfo.relativePath}`;
-      
       await processFile(fileInfo, destination);
       fileCount++;
     }
@@ -134,10 +150,17 @@ const list = async (source: string): Promise<void> => {
 
 const program = new Command();
 
+// Global ignore file option
 program
   .name('filesync')
   .description('CLI to sync files between directories')
-  .version('0.1.0');
+  .version('0.1.0')
+  .option('-i, --ignore <path>', 'Path to ignore file (defaults to .gitignore)');
+
+// Initialize ignore patterns before running commands
+program.hook('preAction', async () => {
+  await initIgnorePatterns(program.opts().ignore);
+});
 
 program.command('push')
   .description('Push files to destination')
