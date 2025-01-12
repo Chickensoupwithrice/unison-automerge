@@ -1,5 +1,6 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
+import { Repo } from "@automerge/automerge-repo"
 import { Command } from 'commander';
 import ora from 'ora';
 import path from 'path';
@@ -28,10 +29,10 @@ let ig: Ignore;
 
 const initIgnorePatterns = async (ignoreFile = '.gitignore'): Promise<void> => {
   ig = ignore();
-  
+
   // Default patterns
   ig.add(['node_modules', '.git', '.DS_Store']);
-  
+
   try {
     const patterns = await readFile(ignoreFile, 'utf8');
     ig.add(patterns);
@@ -58,18 +59,18 @@ const loadConfig = async (): Promise<Config> => {
 
 async function* walk(dir: string, root = dir): AsyncGenerator<FileInfo> {
   const files = await readdir(dir);
-  
+
   for (const file of files) {
     const filepath = path.join(dir, file);
     const relativePath = path.relative(root, filepath);
-    
+
     // Skip if file matches ignore patterns
     if (ig.ignores(relativePath)) {
       continue;
     }
-    
+
     const stats = await stat(filepath);
-    
+
     if (stats.isDirectory()) {
       yield* walk(filepath, root);
     } else {
@@ -135,7 +136,7 @@ const pull = async (source: string, options: CommandOptions): Promise<void> => {
 
 const list = async (source: string): Promise<void> => {
   console.log(`Listing all files in ${source}:`);
-  
+
   try {
     for await (const fileInfo of walk(source)) {
       console.log(`- ${fileInfo.relativePath}`);
