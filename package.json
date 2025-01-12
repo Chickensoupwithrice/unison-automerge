@@ -1,7 +1,8 @@
 {
   "dependencies": {
     "@automerge/automerge": "^2.2.8",
-    "@automerge/automerge-repo": "^1.2.1",
+    "@automerge/automerge-repo": "2.0.0-alpha.13",
+    "@automerge/automerge-repo-network-websocket": "2.0.0-alpha.13",
     "commander": "^13.0.0",
     "cosmiconfig": "^9.0.0",
     "ignore": "^7.0.0",

@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
-import { Repo } from "@automerge/automerge-repo"
+import { AutomergeUrl, Repo } from "@automerge/automerge-repo"
+import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket"
 import { Command } from 'commander';
 import ora from 'ora';
 import path from 'path';
@@ -8,6 +9,13 @@ import { mkdir, readdir, stat, copyFile, readFile } from 'fs/promises';
 import { cosmiconfig } from 'cosmiconfig';
 import ignore, { Ignore } from 'ignore';
 import type { Stats } from 'fs';
+import { exit } from "process";
+
+const repo = new Repo({
+  network: [
+    new BrowserWebSocketClientAdapter("wss://sync.automerge.org")
+  ]
+});
 
 interface FileInfo {
   path: string;
