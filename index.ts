@@ -9,7 +9,6 @@ import { mkdir, readdir, stat, copyFile, readFile } from 'fs/promises';
 import { cosmiconfig } from 'cosmiconfig';
 import ignore, { Ignore } from 'ignore';
 import type { Stats } from 'fs';
-import { exit } from "process";
 
 const repo = new Repo({
   network: [
