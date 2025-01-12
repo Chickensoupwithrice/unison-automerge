@@ -1,6 +1,9 @@
 {
   "dependencies": {
     "@automerge/automerge": "^2.2.8",
-    "@automerge/automerge-repo": "^1.2.1"
+    "@automerge/automerge-repo": "^1.2.1",
+    "commander": "^13.0.0",
+    "cosmiconfig": "^9.0.0",
+    "ora": "^8.1.1"
   }
 }
