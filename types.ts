@@ -8,6 +8,7 @@ export interface ImportedFile {
 }
 
 export interface Folder {
+  contentType: string
   name: string
   contents: FolderItem[]
 }
